@@ -77,38 +77,97 @@ const sortButtons = document.querySelectorAll('.sorters button');
 let currentFilter = 'all';
 let currentSort = null;
 
-// Function to create HTML for a single recipe card (pure)
-const createRecipeCard = (recipe) => {
-    return `
-        <div class="recipe-card" data-id="${recipe.id}">
-            <h3>${recipe.title}</h3>
-            <div class="recipe-meta">
-                <span>⏱️ ${recipe.time} min</span>
-                <span class="difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
-            </div>
-            <p>${recipe.description}</p>
+// Pure function: create HTML for a single recipe card
+const createRecipeCard = (recipe) => `
+    <div class="recipe-card" data-id="${recipe.id}">
+        <h3>${recipe.title}</h3>
+        <div class="recipe-meta">
+            <span>⏱️ ${recipe.time} min</span>
+            <span class="difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
         </div>
-    `;
-};
+        <p>${recipe.description}</p>
+    </div>
+`;
 
-// Function to render recipes to the DOM (side-effect isolated here)
+// Pure function: map recipes to HTML (transformation without side effects)
+const recipesToHTML = (recipesToRender) => 
+    recipesToRender.map(createRecipeCard).join('');
+
+// Side-effect function: render recipes to DOM (only side-effect isolated here)
 const renderRecipes = (recipesToRender) => {
-    const recipeCardsHTML = recipesToRender
-        .map(createRecipeCard)
-        .join('');
-    
-    recipeContainer.innerHTML = recipeCardsHTML;
+    recipeContainer.innerHTML = recipesToHTML(recipesToRender);
 };
 
-// Pure function: filter recipes based on mode
+// Attach event listeners - separated from pure functions
+const attachEventListeners = () => {
+    filterButtons.forEach(button => {
+        button.addEventListener('click', (event) => {
+            currentFilter = event.target.getAttribute('data-filter');
+            updateDisplay();
+        });
+    });
+
+    sortButtons.forEach(button => {
+        button.addEventListener('click', (event) => {
+            const selectedSort = event.target.getAttribute('data-sort');
+            // Toggle sort mode: if clicking the same button, turn off sorting
+            currentSort = (currentSort === selectedSort) ? null : selectedSort;
+            updateDisplay();
+        });
+    });
+};
+
+// Initialize application
+attachEventListeners();
+updateDisplay();
+
+// Pure predicates for filtering - Higher-order functions returning predicates
+const createFilterPredicate = (filterMode) => {
+    const predicates = {
+        all: () => () => true,
+        quick: () => (recipe) => recipe.time < 30,
+        easy: () => (recipe) => recipe.difficulty === 'easy',
+        medium: () => (recipe) => recipe.difficulty === 'medium',
+        hard: () => (recipe) => recipe.difficulty === 'hard'
+    };
+    return (predicates[filterMode] || predicates.all)();
+};
+
+// Pure function: filter recipes based on mode using composed predicates
 const applyFilter = (recipesList, filterMode) => {
-    if (filterMode === 'all') return recipesList;
+    const predicate = createFilterPredicate(filterMode);
+    return recipesList.filter(predicate);
+};
 
-    if (filterMode === 'quick') {
-        return recipesList.filter((recipe) => recipe.time < 30);
-    }
+// Pure comparators for sorting - Higher-order functions returning comparators
+const comparators = {
+    name: (a, b) => a.title.localeCompare(b.title),
+    time: (a, b) => a.time - b.time
+};
 
-    // difficulty filters: easy, medium, hard
-    return recipesList.filter((recipe) => recipe.difficulty === filterMode);
+// Pure function: sort recipes based on mode without mutating original
+const applySort = (recipesList, sortMode) => {
+    if (!sortMode || !comparators[sortMode]) return recipesList;
+    
+    // Create a shallow copy to avoid mutations
+    return [...recipesList].sort(comparators[sortMode]);
+};
+
+// Pure function: compose filter and sort operations
+const processRecipes = (recipesList, filterMode, sortMode) => {
+    return applySort(
+        applyFilter(recipesList, filterMode),
+        sortMode
+    );
+};
+
+// Pure function: get displayed recipes from current state
+const getDisplayedRecipes = () => 
+    processRecipes(recipes, currentFilter, currentSort);
+
+// Central orchestrator: update state and re-render
+const updateDisplay = () => {
+    const recipesToDisplay = getDisplayedRecipes();
+    renderRecipes(recipesToDisplay);
 };
 
