@@ -232,6 +232,72 @@ main {
     content: "";
 }
 
+.substeps-list li strong {
+    color: #555;
+    font-size: 0.85rem;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+/* Support for deeper nesting levels (level 1, 2, 3, etc.) */
+.nested-substeps-level-1 {
+    list-style: decimal;
+    margin-top: 0.4rem;
+    margin-left: 1.5rem;
+    padding-left: 1.5rem;
+    font-size: 0.8rem;
+}
+
+.nested-substeps-level-1 li {
+    padding: 0.2rem 0;
+    padding-left: 0;
+    margin-bottom: 0.2rem;
+    color: #777;
+    line-height: 1.2;
+}
+
+.nested-substeps-level-1 li strong {
+    color: #666;
+    font-size: 0.8rem;
+}
+
+.nested-substeps-level-2 {
+    list-style: circle;
+    margin-top: 0.3rem;
+    margin-left: 1.5rem;
+    padding-left: 1.5rem;
+    font-size: 0.75rem;
+}
+
+.nested-substeps-level-2 li {
+    padding: 0.15rem 0;
+    padding-left: 0;
+    margin-bottom: 0.15rem;
+    color: #888;
+    line-height: 1.1;
+}
+
+.nested-substeps-level-2 li strong {
+    color: #777;
+    font-size: 0.75rem;
+}
+
+.nested-substeps-level-3 {
+    list-style: square;
+    margin-top: 0.2rem;
+    margin-left: 1.5rem;
+    padding-left: 1.5rem;
+    font-size: 0.7rem;
+}
+
+.nested-substeps-level-3 li {
+    padding: 0.1rem 0;
+    padding-left: 0;
+    margin-bottom: 0.1rem;
+    color: #999;
+    line-height: 1.1;
+}
+
 /* Controls Section */
 .controls {
     background: white;

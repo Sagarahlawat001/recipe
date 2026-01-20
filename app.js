@@ -74,10 +74,43 @@ const recipes = [
                 substeps: [
                     "Roll dough into rectangle (30x20cm)",
                     "Place cold butter slab in center, fold dough edges over butter",
-                    "Roll out to 30x20cm, fold into thirds (first turn), refrigerate 30 min",
-                    "Rotate 90°, roll out again, fold into thirds (second turn), refrigerate 30 min",
-                    "Repeat two more times (turns 3 and 4) for proper lamination",
-                    "Final dough should have 729 thin butter layers"
+                    {
+                        step: "Perform lamination folds (4 turns required)",
+                        substeps: [
+                            {
+                                step: "First Turn",
+                                substeps: [
+                                    "Roll dough to 30x20cm thickness",
+                                    "Fold into thirds (letter fold)",
+                                    "Refrigerate 30 minutes"
+                                ]
+                            },
+                            {
+                                step: "Second Turn",
+                                substeps: [
+                                    "Remove from fridge, let rest 5 minutes",
+                                    "Rotate 90° and roll to 30x20cm",
+                                    "Fold into thirds again",
+                                    "Refrigerate 30 minutes"
+                                ]
+                            },
+                            {
+                                step: "Third Turn",
+                                substeps: [
+                                    "Repeat rotation and fold sequence",
+                                    "Refrigerate 30 minutes"
+                                ]
+                            },
+                            {
+                                step: "Fourth Turn (Final)",
+                                substeps: [
+                                    "Rotate and fold one last time",
+                                    "Refrigerate at least 1 hour before shaping"
+                                ]
+                            }
+                        ]
+                    },
+                    "Result: Final dough should have 729 thin butter layers"
                 ]
             },
             "Let dough rest between folds (at least 30 minutes each).",
@@ -269,27 +302,44 @@ const createIngredientsHTML = (ingredients) => `
     </ul>
 `;
 
-// Pure function: create HTML for steps list with support for nested substeps
-const createStepsHTML = (steps) => {
-    const renderStep = (step, index) => {
-        // Handle nested substeps (step is an object with 'step' and 'substeps')
-        if (typeof step === 'object' && step.step && step.substeps) {
-            return `
-                <li>
-                    <strong>${step.step}</strong>
-                    <ul class="substeps-list">
-                        ${step.substeps.map(substep => `<li>${substep}</li>`).join('')}
-                    </ul>
-                </li>
-            `;
-        }
-        // Handle simple string steps
+// Pure recursive function: render steps at any nesting level
+// Supports arbitrary depth of nesting (steps → substeps → sub-substeps → ...)
+const renderStepRecursively = (step, depth = 0) => {
+    // Base case: if step is a string, render as list item
+    if (typeof step === 'string') {
         return `<li>${step}</li>`;
-    };
+    }
+    
+    // Recursive case: if step is an object with 'step' and 'substeps'
+    if (typeof step === 'object' && step.step && Array.isArray(step.substeps)) {
+        const substepsClass = depth === 0 ? 'substeps-list' : `nested-substeps-level-${depth}`;
+        const renderedSubsteps = step.substeps
+            .map(substep => renderStepRecursively(substep, depth + 1))
+            .join('');
+        
+        return `
+            <li>
+                <strong>${step.step}</strong>
+                <ul class="${substepsClass}">
+                    ${renderedSubsteps}
+                </ul>
+            </li>
+        `;
+    }
+    
+    // Fallback for edge cases
+    return `<li>${String(step)}</li>`;
+};
+
+// Pure function: create HTML for steps list with recursive nesting support
+const createStepsHTML = (steps) => {
+    const renderedSteps = steps
+        .map(step => renderStepRecursively(step, 0))
+        .join('');
     
     return `
         <ol class="steps-list">
-            ${steps.map((step, index) => renderStep(step, index)).join('')}
+            ${renderedSteps}
         </ol>
     `;
 };
