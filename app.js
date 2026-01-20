@@ -69,12 +69,23 @@ const recipes = [
         ],
         steps: [
             "Mix flour, salt, sugar, yeast, and water to form dough.",
-            "Fold in cold butter using lamination technique (multiple turns).",
+            {
+                step: "Fold in cold butter using lamination technique - perform 4-6 folds total",
+                substeps: [
+                    "Roll dough into rectangle (30x20cm)",
+                    "Place cold butter slab in center, fold dough edges over butter",
+                    "Roll out to 30x20cm, fold into thirds (first turn), refrigerate 30 min",
+                    "Rotate 90°, roll out again, fold into thirds (second turn), refrigerate 30 min",
+                    "Repeat two more times (turns 3 and 4) for proper lamination",
+                    "Final dough should have 729 thin butter layers"
+                ]
+            },
             "Let dough rest between folds (at least 30 minutes each).",
-            "Roll out dough and cut into triangles.",
-            "Roll triangles into croissant shapes and place on baking sheet.",
-            "Let rise for 1 hour at room temperature.",
-            "Brush with egg wash and bake at 200°C for 20-25 minutes until golden."
+            "Roll out dough to 3mm thickness and cut into triangles (8x12cm).",
+            "Roll triangles into croissant shapes, starting from wide end.",
+            "Place on parchment-lined baking sheet with pointed end tucked underneath.",
+            "Let rise for 1-2 hours at room temperature until puffy.",
+            "Brush with egg wash and bake at 200°C for 20-25 minutes until golden brown."
         ]
     },
     {
@@ -121,12 +132,39 @@ const recipes = [
             "Salt and pepper to taste"
         ],
         steps: [
-            "Sear beef on all sides until browned, then cool completely.",
-            "Prepare duxelles: sauté mushrooms, shallots, and garlic until dry.",
-            "Spread pâté on beef, then layer mushroom duxelles on top.",
-            "Wrap beef tightly in puff pastry, sealing edges.",
-            "Brush with egg wash and score decoratively.",
-            "Bake at 180°C for 25-35 minutes until pastry is golden.",
+            {
+                step: "Sear and prepare the beef fillet",
+                substeps: [
+                    "Pat beef dry with paper towels",
+                    "Season generously with salt and pepper",
+                    "Heat oil in large pan until very hot",
+                    "Sear beef 2-3 minutes on each side until golden brown",
+                    "Cool completely on cutting board (can refrigerate)"
+                ]
+            },
+            {
+                step: "Prepare mushroom duxelles - the key layer",
+                substeps: [
+                    "Finely chop mushrooms to release moisture",
+                    "Sauté shallots and garlic in butter until fragrant",
+                    "Add mushrooms and cook until all liquid evaporates (15-20 min)",
+                    "Season with salt and pepper, cool before using"
+                ]
+            },
+            "Spread thin layer of pâté evenly over all sides of beef.",
+            "Layer mushroom duxelles on top of pâté.",
+            {
+                step: "Wrap beef in puff pastry carefully",
+                substeps: [
+                    "Roll out pastry to 3mm thickness",
+                    "Place beef in center and wrap pastry around it",
+                    "Seal edges with egg wash, press gently",
+                    "Trim excess pastry and reserve for decoration"
+                ]
+            },
+            "Brush entire pastry surface with egg wash.",
+            "Score decoratively with knife (optional for appearance).",
+            "Bake at 180°C for 25-35 minutes until pastry is golden and internal temp reaches 50-55°C.",
             "Rest for 10 minutes before slicing and serving."
         ]
     },
@@ -231,12 +269,30 @@ const createIngredientsHTML = (ingredients) => `
     </ul>
 `;
 
-// Pure function: create HTML for steps list
-const createStepsHTML = (steps) => `
-    <ol class="steps-list">
-        ${steps.map(step => `<li>${step}</li>`).join('')}
-    </ol>
-`;
+// Pure function: create HTML for steps list with support for nested substeps
+const createStepsHTML = (steps) => {
+    const renderStep = (step, index) => {
+        // Handle nested substeps (step is an object with 'step' and 'substeps')
+        if (typeof step === 'object' && step.step && step.substeps) {
+            return `
+                <li>
+                    <strong>${step.step}</strong>
+                    <ul class="substeps-list">
+                        ${step.substeps.map(substep => `<li>${substep}</li>`).join('')}
+                    </ul>
+                </li>
+            `;
+        }
+        // Handle simple string steps
+        return `<li>${step}</li>`;
+    };
+    
+    return `
+        <ol class="steps-list">
+            ${steps.map((step, index) => renderStep(step, index)).join('')}
+        </ol>
+    `;
+};
 
 // Pure function: create HTML for a single recipe card with expandable sections
 const createRecipeCard = (recipe) => `
