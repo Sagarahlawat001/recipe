@@ -1,5 +1,10 @@
-// Recipe data - Foundation for all 4 parts
-const recipes = [
+
+// Recipe Application Module - IIFE for encapsulation
+const RecipeApp = (() => {
+    
+    // ========== PRIVATE DATA ==========
+    // Recipe data - hidden from global scope
+    const recipes = [
     {
         id: 1,
         title: "Classic Spaghetti Carbonara",
@@ -284,199 +289,222 @@ const recipes = [
     }
 ];
 
-// DOM Selection - Get the container where recipes will be displayed
-const recipeContainer = document.querySelector('#recipe-container');
+    // ========== PRIVATE VARIABLES ==========
+    // DOM Selection - Get the container where recipes will be displayed
+    const recipeContainer = document.querySelector('#recipe-container');
 
-// Controls
-const filterButtons = document.querySelectorAll('.filters button');
-const sortButtons = document.querySelectorAll('.sorters button');
+    // Controls
+    const filterButtons = document.querySelectorAll('.filters button');
+    const sortButtons = document.querySelectorAll('.sorters button');
 
-// State (filter + sort mode only, not mutating recipes)
-let currentFilter = 'all';
-let currentSort = null;
+    // State (filter + sort mode only, not mutating recipes)
+    let currentFilter = 'all';
+    let currentSort = null;
 
-// Pure function: create HTML for ingredients list
-const createIngredientsHTML = (ingredients) => `
-    <ul class="ingredients-list">
-        ${ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
-    </ul>
-`;
+    // ========== PRIVATE HELPER FUNCTIONS ==========
+    // Pure function: create HTML for ingredients list
+    const createIngredientsHTML = (ingredients) => `
+        <ul class="ingredients-list">
+            ${ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
+        </ul>
+    `;
 
-// Pure recursive function: render steps at any nesting level
-// Supports arbitrary depth of nesting (steps → substeps → sub-substeps → ...)
-const renderStepRecursively = (step, depth = 0) => {
-    // Base case: if step is a string, render as list item
-    if (typeof step === 'string') {
-        return `<li>${step}</li>`;
-    }
-    
-    // Recursive case: if step is an object with 'step' and 'substeps'
-    if (typeof step === 'object' && step.step && Array.isArray(step.substeps)) {
-        const substepsClass = depth === 0 ? 'substeps-list' : `nested-substeps-level-${depth}`;
-        const renderedSubsteps = step.substeps
-            .map(substep => renderStepRecursively(substep, depth + 1))
+    // Pure recursive function: render steps at any nesting level
+    // Supports arbitrary depth of nesting (steps → substeps → sub-substeps → ...)
+    const renderStepRecursively = (step, depth = 0) => {
+        // Base case: if step is a string, render as list item
+        if (typeof step === 'string') {
+            return `<li>${step}</li>`;
+        }
+        
+        // Recursive case: if step is an object with 'step' and 'substeps'
+        if (typeof step === 'object' && step.step && Array.isArray(step.substeps)) {
+            const substepsClass = depth === 0 ? 'substeps-list' : `nested-substeps-level-${depth}`;
+            const renderedSubsteps = step.substeps
+                .map(substep => renderStepRecursively(substep, depth + 1))
+                .join('');
+            
+            return `
+                <li>
+                    <strong>${step.step}</strong>
+                    <ul class="${substepsClass}">
+                        ${renderedSubsteps}
+                    </ul>
+                </li>
+            `;
+        }
+        
+        // Fallback for edge cases
+        return `<li>${String(step)}</li>`;
+    };
+
+    // Pure function: create HTML for steps list with recursive nesting support
+    const createStepsHTML = (steps) => {
+        const renderedSteps = steps
+            .map(step => renderStepRecursively(step, 0))
             .join('');
         
         return `
-            <li>
-                <strong>${step.step}</strong>
-                <ul class="${substepsClass}">
-                    ${renderedSubsteps}
-                </ul>
-            </li>
+            <ol class="steps-list">
+                ${renderedSteps}
+            </ol>
         `;
-    }
-    
-    // Fallback for edge cases
-    return `<li>${String(step)}</li>`;
-};
-
-// Pure function: create HTML for steps list with recursive nesting support
-const createStepsHTML = (steps) => {
-    const renderedSteps = steps
-        .map(step => renderStepRecursively(step, 0))
-        .join('');
-    
-    return `
-        <ol class="steps-list">
-            ${renderedSteps}
-        </ol>
-    `;
-};
-
-// Pure function: create HTML for a single recipe card with expandable sections
-const createRecipeCard = (recipe) => `
-    <div class="recipe-card" data-id="${recipe.id}">
-        <h3>${recipe.title}</h3>
-        <div class="recipe-meta">
-            <span>⏱️ ${recipe.time} min</span>
-            <span class="difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
-        </div>
-        <p>${recipe.description}</p>
-        
-        <div class="recipe-actions">
-            <button class="toggle-btn toggle-ingredients" data-id="${recipe.id}" data-section="ingredients">
-                📋 Show Ingredients
-            </button>
-            <button class="toggle-btn toggle-steps" data-id="${recipe.id}" data-section="steps">
-                👨‍🍳 Show Steps
-            </button>
-        </div>
-        
-        <div class="expandable-section ingredients-section" id="ingredients-${recipe.id}" style="display: none;">
-            <h4>Ingredients:</h4>
-            ${createIngredientsHTML(recipe.ingredients)}
-        </div>
-        
-        <div class="expandable-section steps-section" id="steps-${recipe.id}" style="display: none;">
-            <h4>Steps:</h4>
-            ${createStepsHTML(recipe.steps)}
-        </div>
-    </div>
-`;
-
-// Pure function: map recipes to HTML (transformation without side effects)
-const recipesToHTML = (recipesToRender) => 
-    recipesToRender.map(createRecipeCard).join('');
-
-// Side-effect function: render recipes to DOM (only side-effect isolated here)
-const renderRecipes = (recipesToRender) => {
-    recipeContainer.innerHTML = recipesToHTML(recipesToRender);
-    attachToggleListeners();
-};
-
-// Attach event listeners for expandable sections (pure event attachment)
-const attachToggleListeners = () => {
-    document.querySelectorAll('.toggle-btn').forEach(button => {
-        button.addEventListener('click', (event) => {
-            const recipeId = event.target.getAttribute('data-id');
-            const section = event.target.getAttribute('data-section');
-            const sectionElement = document.getElementById(`${section}-${recipeId}`);
-            
-            if (sectionElement) {
-                const isHidden = sectionElement.style.display === 'none';
-                sectionElement.style.display = isHidden ? 'block' : 'none';
-                
-                // Update button text
-                const label = section === 'ingredients' ? '📋' : '👨‍🍳';
-                event.target.textContent = isHidden 
-                    ? `${label} Hide ${section.charAt(0).toUpperCase() + section.slice(1)}` 
-                    : `${label} Show ${section.charAt(0).toUpperCase() + section.slice(1)}`;
-            }
-        });
-    });
-};
-
-// Attach event listeners - separated from pure functions
-const attachEventListeners = () => {
-    filterButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-            currentFilter = event.target.getAttribute('data-filter');
-            updateDisplay();
-        });
-    });
-
-    sortButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-            const selectedSort = event.target.getAttribute('data-sort');
-            // Toggle sort mode: if clicking the same button, turn off sorting
-            currentSort = (currentSort === selectedSort) ? null : selectedSort;
-            updateDisplay();
-        });
-    });
-};
-
-// Initialize application
-attachEventListeners();
-updateDisplay();
-
-// Pure predicates for filtering - Higher-order functions returning predicates
-const createFilterPredicate = (filterMode) => {
-    const predicates = {
-        all: () => () => true,
-        quick: () => (recipe) => recipe.time < 30,
-        easy: () => (recipe) => recipe.difficulty === 'easy',
-        medium: () => (recipe) => recipe.difficulty === 'medium',
-        hard: () => (recipe) => recipe.difficulty === 'hard'
     };
-    return (predicates[filterMode] || predicates.all)();
-};
 
-// Pure function: filter recipes based on mode using composed predicates
-const applyFilter = (recipesList, filterMode) => {
-    const predicate = createFilterPredicate(filterMode);
-    return recipesList.filter(predicate);
-};
+    // Pure function: create HTML for a single recipe card with expandable sections
+    const createRecipeCard = (recipe) => `
+        <div class="recipe-card" data-id="${recipe.id}">
+            <h3>${recipe.title}</h3>
+            <div class="recipe-meta">
+                <span>⏱️ ${recipe.time} min</span>
+                <span class="difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
+            </div>
+            <p>${recipe.description}</p>
+            
+            <div class="recipe-actions">
+                <button class="toggle-btn toggle-ingredients" data-id="${recipe.id}" data-section="ingredients">
+                    📋 Show Ingredients
+                </button>
+                <button class="toggle-btn toggle-steps" data-id="${recipe.id}" data-section="steps">
+                    👨‍🍳 Show Steps
+                </button>
+            </div>
+            
+            <div class="expandable-section ingredients-section" id="ingredients-${recipe.id}" style="display: none;">
+                <h4>Ingredients:</h4>
+                ${createIngredientsHTML(recipe.ingredients)}
+            </div>
+            
+            <div class="expandable-section steps-section" id="steps-${recipe.id}" style="display: none;">
+                <h4>Steps:</h4>
+                ${createStepsHTML(recipe.steps)}
+            </div>
+        </div>
+    `;
 
-// Pure comparators for sorting - Higher-order functions returning comparators
-const comparators = {
-    name: (a, b) => a.title.localeCompare(b.title),
-    time: (a, b) => a.time - b.time
-};
+    // Pure function: map recipes to HTML (transformation without side effects)
+    const recipesToHTML = (recipesToRender) => 
+        recipesToRender.map(createRecipeCard).join('');
 
-// Pure function: sort recipes based on mode without mutating original
-const applySort = (recipesList, sortMode) => {
-    if (!sortMode || !comparators[sortMode]) return recipesList;
+    // Side-effect function: render recipes to DOM (only side-effect isolated here)
+    const renderRecipes = (recipesToRender) => {
+        recipeContainer.innerHTML = recipesToHTML(recipesToRender);
+        attachToggleListeners();
+    };
+
+    // Attach event listeners for expandable sections (pure event attachment)
+    const attachToggleListeners = () => {
+        document.querySelectorAll('.toggle-btn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const recipeId = event.target.getAttribute('data-id');
+                const section = event.target.getAttribute('data-section');
+                const sectionElement = document.getElementById(`${section}-${recipeId}`);
+                
+                if (sectionElement) {
+                    const isHidden = sectionElement.style.display === 'none';
+                    sectionElement.style.display = isHidden ? 'block' : 'none';
+                    
+                    // Update button text
+                    const label = section === 'ingredients' ? '📋' : '👨‍🍳';
+                    event.target.textContent = isHidden 
+                        ? `${label} Hide ${section.charAt(0).toUpperCase() + section.slice(1)}` 
+                        : `${label} Show ${section.charAt(0).toUpperCase() + section.slice(1)}`;
+                }
+            });
+        });
+    };
+
+    // Attach event listeners - separated from pure functions
+    const attachEventListeners = () => {
+        filterButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                currentFilter = event.target.getAttribute('data-filter');
+                updateDisplay();
+            });
+        });
+
+        sortButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                const selectedSort = event.target.getAttribute('data-sort');
+                // Toggle sort mode: if clicking the same button, turn off sorting
+                currentSort = (currentSort === selectedSort) ? null : selectedSort;
+                updateDisplay();
+            });
+        });
+    };
+
+    // ========== PURE FUNCTIONS FOR BUSINESS LOGIC ==========
+    // Pure predicates for filtering - Higher-order functions returning predicates
+    const createFilterPredicate = (filterMode) => {
+        const predicates = {
+            all: () => () => true,
+            quick: () => (recipe) => recipe.time < 30,
+            easy: () => (recipe) => recipe.difficulty === 'easy',
+            medium: () => (recipe) => recipe.difficulty === 'medium',
+            hard: () => (recipe) => recipe.difficulty === 'hard'
+        };
+        return (predicates[filterMode] || predicates.all)();
+    };
+
+    // Pure function: filter recipes based on mode using composed predicates
+    const applyFilter = (recipesList, filterMode) => {
+        const predicate = createFilterPredicate(filterMode);
+        return recipesList.filter(predicate);
+    };
+
+    // Pure comparators for sorting - Higher-order functions returning comparators
+    const comparators = {
+        name: (a, b) => a.title.localeCompare(b.title),
+        time: (a, b) => a.time - b.time
+    };
+
+    // Pure function: sort recipes based on mode without mutating original
+    const applySort = (recipesList, sortMode) => {
+        if (!sortMode || !comparators[sortMode]) return recipesList;
+        
+        // Create a shallow copy to avoid mutations
+        return [...recipesList].sort(comparators[sortMode]);
+    };
+
+    // Pure function: compose filter and sort operations
+    const processRecipes = (recipesList, filterMode, sortMode) => {
+        return applySort(
+            applyFilter(recipesList, filterMode),
+            sortMode
+        );
+    };
+
+    // Pure function: get displayed recipes from current state
+    const getDisplayedRecipes = () => 
+        processRecipes(recipes, currentFilter, currentSort);
+
+    // Central orchestrator: update state and re-render
+    const updateDisplay = () => {
+        const recipesToDisplay = getDisplayedRecipes();
+        renderRecipes(recipesToDisplay);
+    };
+
+    // ========== PUBLIC API ==========
+    // Return only the methods needed to initialize the application
+    return {
+        /**
+         * Initialize the Recipe App
+         * Sets up event listeners and renders initial recipes
+         * @public
+         */
+        init: () => {
+            attachEventListeners();
+            updateDisplay();
+        }
+    };
     
-    // Create a shallow copy to avoid mutations
-    return [...recipesList].sort(comparators[sortMode]);
-};
+})();
 
-// Pure function: compose filter and sort operations
-const processRecipes = (recipesList, filterMode, sortMode) => {
-    return applySort(
-        applyFilter(recipesList, filterMode),
-        sortMode
-    );
-};
+// Application Entry Point
+// Initialize the app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    RecipeApp.init();
+});
 
-// Pure function: get displayed recipes from current state
-const getDisplayedRecipes = () => 
-    processRecipes(recipes, currentFilter, currentSort);
-
-// Central orchestrator: update state and re-render
-const updateDisplay = () => {
-    const recipesToDisplay = getDisplayedRecipes();
-    renderRecipes(recipesToDisplay);
-};
-
+// Alternative: Call init immediately if script is loaded at end of body
+// RecipeApp.init();
