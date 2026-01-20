@@ -1,5 +1,14 @@
 
+// ============================================================
 // Recipe Application Module - IIFE for encapsulation
+// ============================================================
+// Architecture:
+// - Encapsulates all functionality in IIFE module pattern
+// - Uses event delegation for optimal performance
+// - Maintains pure functions for business logic
+// - Separates side-effects from pure computation
+// - Single public API: RecipeApp.init()
+// ============================================================
 const RecipeApp = (() => {
     
     // ========== PRIVATE DATA ==========
@@ -290,14 +299,10 @@ const RecipeApp = (() => {
 ];
 
     // ========== PRIVATE VARIABLES ==========
-    // DOM Selection - Get the container where recipes will be displayed
+    // DOM Reference - Get the container where recipes will be displayed
     const recipeContainer = document.querySelector('#recipe-container');
 
-    // Controls
-    const filterButtons = document.querySelectorAll('.filters button');
-    const sortButtons = document.querySelectorAll('.sorters button');
-
-    // State (filter + sort mode only, not mutating recipes)
+    // Application State - filter and sort modes (recipes array is immutable)
     let currentFilter = 'all';
     let currentSort = null;
 
@@ -392,45 +397,79 @@ const RecipeApp = (() => {
         attachToggleListeners();
     };
 
-    // Attach event listeners for expandable sections (pure event attachment)
-    const attachToggleListeners = () => {
-        document.querySelectorAll('.toggle-btn').forEach(button => {
-            button.addEventListener('click', (event) => {
-                const recipeId = event.target.getAttribute('data-id');
-                const section = event.target.getAttribute('data-section');
-                const sectionElement = document.getElementById(`${section}-${recipeId}`);
-                
-                if (sectionElement) {
-                    const isHidden = sectionElement.style.display === 'none';
-                    sectionElement.style.display = isHidden ? 'block' : 'none';
-                    
-                    // Update button text
-                    const label = section === 'ingredients' ? '📋' : '👨‍🍳';
-                    event.target.textContent = isHidden 
-                        ? `${label} Hide ${section.charAt(0).toUpperCase() + section.slice(1)}` 
-                        : `${label} Show ${section.charAt(0).toUpperCase() + section.slice(1)}`;
-                }
-            });
-        });
+    // ========== EVENT HANDLING WITH DELEGATION ==========
+    // Pure function: handle toggle button clicks with event delegation
+    // Uses event.target.closest() to find toggle button in event bubble chain
+    // Benefits: Single listener handles all toggle buttons, works with dynamic content
+    const handleToggleClick = (event) => {
+        const toggleBtn = event.target.closest('.toggle-btn');
+        if (!toggleBtn) return; // Exit if click wasn't on a toggle button
+        
+        const recipeId = toggleBtn.getAttribute('data-id');
+        const section = toggleBtn.getAttribute('data-section');
+        const sectionElement = document.getElementById(`${section}-${recipeId}`);
+        
+        if (sectionElement) {
+            const isHidden = sectionElement.style.display === 'none';
+            sectionElement.style.display = isHidden ? 'block' : 'none';
+            
+            // Update button text to reflect state
+            const label = section === 'ingredients' ? '📋' : '👨‍🍳';
+            const action = isHidden ? 'Hide' : 'Show';
+            const sectionName = section.charAt(0).toUpperCase() + section.slice(1);
+            toggleBtn.textContent = `${label} ${action} ${sectionName}`;
+        }
     };
 
-    // Attach event listeners - separated from pure functions
-    const attachEventListeners = () => {
-        filterButtons.forEach(button => {
-            button.addEventListener('click', (event) => {
-                currentFilter = event.target.getAttribute('data-filter');
-                updateDisplay();
-            });
-        });
+    // Pure function: handle filter button clicks with event delegation
+    // Single listener on .filters section handles all filter buttons
+    // Benefits: Minimal memory footprint, works with dynamic button creation
+    const handleFilterClick = (event) => {
+        const filterBtn = event.target.closest('.filters button');
+        if (!filterBtn) return; // Exit if click wasn't on a filter button
+        
+        currentFilter = filterBtn.getAttribute('data-filter');
+        updateDisplay();
+    };
 
-        sortButtons.forEach(button => {
-            button.addEventListener('click', (event) => {
-                const selectedSort = event.target.getAttribute('data-sort');
-                // Toggle sort mode: if clicking the same button, turn off sorting
-                currentSort = (currentSort === selectedSort) ? null : selectedSort;
-                updateDisplay();
-            });
-        });
+    // Pure function: handle sort button clicks with event delegation
+    // Single listener on .sorters section handles all sort buttons
+    // Benefits: Efficient, enables toggling of sort mode on same button click
+    const handleSortClick = (event) => {
+        const sortBtn = event.target.closest('.sorters button');
+        if (!sortBtn) return; // Exit if click wasn't on a sort button
+        
+        const selectedSort = sortBtn.getAttribute('data-sort');
+        // Toggle sort mode: if clicking the same button, turn off sorting
+        currentSort = (currentSort === selectedSort) ? null : selectedSort;
+        updateDisplay();
+    };
+
+    // Attach event listeners using event delegation for better performance
+    // Single listener on recipeContainer handles all toggle button clicks
+    // This is called after rendering new recipes to maintain delegation
+    const attachToggleListeners = () => {
+        recipeContainer.removeEventListener('click', handleToggleClick);
+        recipeContainer.addEventListener('click', handleToggleClick);
+    };
+
+    // Attach event listeners using event delegation for filter and sort buttons
+    // Each section gets a single delegated listener for optimal performance
+    // These listeners are attached once during init and persist throughout app lifetime
+    const attachEventListeners = () => {
+        // Event delegation for filter buttons - attach to .filters section
+        // Handles all current and future filter buttons within this section
+        const filtersSection = document.querySelector('.filters');
+        if (filtersSection) {
+            filtersSection.addEventListener('click', handleFilterClick);
+        }
+
+        // Event delegation for sort buttons - attach to .sorters section
+        // Handles all current and future sort buttons within this section
+        const sortersSection = document.querySelector('.sorters');
+        if (sortersSection) {
+            sortersSection.addEventListener('click', handleSortClick);
+        }
     };
 
     // ========== PURE FUNCTIONS FOR BUSINESS LOGIC ==========
