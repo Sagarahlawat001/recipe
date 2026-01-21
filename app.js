@@ -11,8 +11,30 @@
 // ============================================================
 const RecipeApp = (() => {
     
+    // ========== CONSTANTS ==========
+    const FAVORITES_STORAGE_KEY = 'recipeApp_favorites';
+    const SEARCH_DEBOUNCE_DELAY = 300;
+    const QUICK_RECIPE_TIME_LIMIT = 30;
+
+    // ========== DOM REFERENCES ==========
+    // Cache DOM elements for optimal performance (avoids repeated queries)
+    const domElements = {
+        recipeContainer: document.querySelector('#recipe-container'),
+        searchInput: document.querySelector('#search-input'),
+        searchResultsCount: document.querySelector('#search-results-count'),
+        recipeCounter: document.querySelector('#recipe-counter'),
+        filtersSection: document.querySelector('.filters'),
+        sortersSection: document.querySelector('.sorters')
+    };
+
     // ========== PRIVATE DATA ==========
-    // Recipe data - hidden from global scope
+    // Application state
+    let currentSearchQuery = '';
+    let currentFilter = 'all';
+    let currentSort = null;
+    let favoritesSet = new Set();
+    
+    // Recipe data - immutable collection of all available recipes
     const recipes = [
     {
         id: 1,
@@ -298,15 +320,7 @@ const RecipeApp = (() => {
     }
 ];
 
-    // ========== PRIVATE VARIABLES ==========
-    // DOM Reference - Get the container where recipes will be displayed
-    const recipeContainer = document.querySelector('#recipe-container');
-
-    // Application State - filter and sort modes (recipes array is immutable)
-    let currentFilter = 'all';
-    let currentSort = null;
-
-    // ========== PRIVATE HELPER FUNCTIONS ==========
+    // ========== HTML GENERATION UTILITIES ==========
     // Pure function: create HTML for ingredients list
     const createIngredientsHTML = (ingredients) => `
         <ul class="ingredients-list">
@@ -357,9 +371,19 @@ const RecipeApp = (() => {
     };
 
     // Pure function: create HTML for a single recipe card with expandable sections
-    const createRecipeCard = (recipe) => `
+    const createRecipeCard = (recipe) => {
+        const isFavorited = favoritesSet.has(recipe.id);
+        const heartButtonClass = isFavorited ? 'heart-btn active' : 'heart-btn';
+        const heartIcon = isFavorited ? '❤️' : '🤍';
+        
+        return `
         <div class="recipe-card" data-id="${recipe.id}">
-            <h3>${recipe.title}</h3>
+            <div class="recipe-card-header">
+                <h3>${recipe.title}</h3>
+                <button class="${heartButtonClass}" data-id="${recipe.id}" aria-label="Add to favorites">
+                    ${heartIcon}
+                </button>
+            </div>
             <div class="recipe-meta">
                 <span>⏱️ ${recipe.time} min</span>
                 <span class="difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
@@ -386,6 +410,7 @@ const RecipeApp = (() => {
             </div>
         </div>
     `;
+    };
 
     // Pure function: map recipes to HTML (transformation without side effects)
     const recipesToHTML = (recipesToRender) => 
@@ -393,134 +418,276 @@ const RecipeApp = (() => {
 
     // Side-effect function: render recipes to DOM (only side-effect isolated here)
     const renderRecipes = (recipesToRender) => {
-        recipeContainer.innerHTML = recipesToHTML(recipesToRender);
-        attachToggleListeners();
+        domElements.recipeContainer.innerHTML = recipesToHTML(recipesToRender);
+        attachRecipeContainerListeners();
+    };
+
+    // ========== DEBOUNCING UTILITY ==========
+    // Pure function: create a debounced version of a function
+    // Delays execution until no new calls are made for the specified wait time
+    // Benefits: Prevents excessive function calls, improves performance
+    const createDebouncedFunction = (func, delayMs) => {
+        let timeoutId = null;
+        
+        return function debouncedFn(...args) {
+            // Clear existing timeout if any
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+            
+            // Set new timeout for delayed execution
+            timeoutId = setTimeout(() => {
+                func(...args);
+            }, delayMs);
+        };
+    };
+
+    // ========== SEARCH FUNCTIONALITY ==========
+    // Pure function: check if a recipe matches the search query
+    // Searches in title and all ingredients (case-insensitive)
+    const recipeMatchesSearchQuery = (recipe, searchQuery) => {
+        if (!searchQuery || searchQuery.trim() === '') return true;
+        
+        const lowerSearchQuery = searchQuery.toLowerCase();
+        
+        // Check title
+        if (recipe.title.toLowerCase().includes(lowerSearchQuery)) {
+            return true;
+        }
+        
+        // Check ingredients
+        if (recipe.ingredients.some(ingredient => 
+            ingredient.toLowerCase().includes(lowerSearchQuery)
+        )) {
+            return true;
+        }
+        
+        return false;
+    };
+
+    // Pure function: filter recipes by search query
+    const applySearchFilter = (recipesList, searchQuery) => {
+        return recipesList.filter(recipe => recipeMatchesSearchQuery(recipe, searchQuery));
+    };
+
+    // Pure function: compose search, filter, and sort operations
+    const processRecipesWithAllFilters = (recipesList, searchQuery, filterMode, sortMode) => {
+        return applySortToRecipes(
+            applyDifficultyFilter(
+                applySearchFilter(recipesList, searchQuery),
+                filterMode
+            ),
+            sortMode
+        );
+    };
+
+    // Pure function: get displayed recipes including all filters
+    const getFilteredRecipesList = () => 
+        processRecipesWithAllFilters(recipes, currentSearchQuery, currentFilter, currentSort);
+
+    // Handle search input changes (will be debounced)
+    const handleSearchInputChange = (event) => {
+        currentSearchQuery = event.target.value;
+        updateDisplay();
+    };
+
+    // Create debounced version of search handler
+    const debouncedSearchInputHandler = createDebouncedFunction(handleSearchInputChange, SEARCH_DEBOUNCE_DELAY);
+
+    // Update the search results count display
+    const updateSearchResultsDisplay = () => {
+        if (!domElements.searchResultsCount) return;
+        
+        if (!currentSearchQuery || currentSearchQuery.trim() === '') {
+            domElements.searchResultsCount.textContent = '';
+            return;
+        }
+        
+        const filteredRecipes = getFilteredRecipesList();
+        const matchCount = filteredRecipes.length;
+        
+        if (matchCount === 0) {
+            domElements.searchResultsCount.textContent = `No recipes found for "${currentSearchQuery}"`;
+            domElements.searchResultsCount.classList.add('no-results');
+        } else {
+            domElements.searchResultsCount.textContent = `Found ${matchCount} recipe${matchCount !== 1 ? 's' : ''}`;
+            domElements.searchResultsCount.classList.remove('no-results');
+        }
+    };
+
+    // ========== FAVORITES MANAGEMENT ==========
+    // Pure function: load favorites from localStorage
+    const loadFavoritesFromStorage = () => {
+        try {
+            const storedFavorites = localStorage.getItem(FAVORITES_STORAGE_KEY);
+            return new Set(storedFavorites ? JSON.parse(storedFavorites) : []);
+        } catch (error) {
+            console.error('Error loading favorites from localStorage:', error);
+            return new Set();
+        }
+    };
+
+    // Pure function: save favorites to localStorage
+    const persistFavoritesToStorage = () => {
+        try {
+            localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favoritesSet]));
+        } catch (error) {
+            console.error('Error saving favorites to localStorage:', error);
+        }
+    };
+
+    // Pure function: toggle favorite status for a recipe
+    const toggleRecipeFavorite = (recipeId) => {
+        if (favoritesSet.has(recipeId)) {
+            favoritesSet.delete(recipeId);
+        } else {
+            favoritesSet.add(recipeId);
+        }
+        persistFavoritesToStorage();
+    };
+
+    // Handle favorite button clicks with event delegation
+    const handleFavoriteButtonClick = (event) => {
+        const favoriteButton = event.target.closest('.heart-btn');
+        if (!favoriteButton) return;
+        
+        const recipeId = parseInt(favoriteButton.getAttribute('data-id'), 10);
+        toggleRecipeFavorite(recipeId);
+        updateDisplay();
     };
 
     // ========== EVENT HANDLING WITH DELEGATION ==========
     // Pure function: handle toggle button clicks with event delegation
     // Uses event.target.closest() to find toggle button in event bubble chain
-    // Benefits: Single listener handles all toggle buttons, works with dynamic content
-    const handleToggleClick = (event) => {
-        const toggleBtn = event.target.closest('.toggle-btn');
-        if (!toggleBtn) return; // Exit if click wasn't on a toggle button
+    const handleExpandableSectionToggle = (event) => {
+        const toggleButton = event.target.closest('.toggle-btn');
+        if (!toggleButton) return;
         
-        const recipeId = toggleBtn.getAttribute('data-id');
-        const section = toggleBtn.getAttribute('data-section');
-        const sectionElement = document.getElementById(`${section}-${recipeId}`);
+        const recipeId = toggleButton.getAttribute('data-id');
+        const sectionType = toggleButton.getAttribute('data-section');
+        const sectionElement = document.getElementById(`${sectionType}-${recipeId}`);
         
         if (sectionElement) {
-            const isHidden = sectionElement.style.display === 'none';
-            sectionElement.style.display = isHidden ? 'block' : 'none';
+            const isCurrentlyHidden = sectionElement.style.display === 'none';
+            sectionElement.style.display = isCurrentlyHidden ? 'block' : 'none';
             
             // Update button text to reflect state
-            const label = section === 'ingredients' ? '📋' : '👨‍🍳';
-            const action = isHidden ? 'Hide' : 'Show';
-            const sectionName = section.charAt(0).toUpperCase() + section.slice(1);
-            toggleBtn.textContent = `${label} ${action} ${sectionName}`;
+            const sectionIcon = sectionType === 'ingredients' ? '📋' : '👨‍🍳';
+            const actionText = isCurrentlyHidden ? 'Hide' : 'Show';
+            const sectionName = sectionType.charAt(0).toUpperCase() + sectionType.slice(1);
+            toggleButton.textContent = `${sectionIcon} ${actionText} ${sectionName}`;
         }
     };
 
     // Pure function: handle filter button clicks with event delegation
-    // Single listener on .filters section handles all filter buttons
-    // Benefits: Minimal memory footprint, works with dynamic button creation
-    const handleFilterClick = (event) => {
-        const filterBtn = event.target.closest('.filters button');
-        if (!filterBtn) return; // Exit if click wasn't on a filter button
+    const handleFilterButtonClick = (event) => {
+        const filterButton = event.target.closest('.filters button');
+        if (!filterButton) return;
         
-        currentFilter = filterBtn.getAttribute('data-filter');
+        currentFilter = filterButton.getAttribute('data-filter');
         updateDisplay();
     };
 
     // Pure function: handle sort button clicks with event delegation
-    // Single listener on .sorters section handles all sort buttons
-    // Benefits: Efficient, enables toggling of sort mode on same button click
-    const handleSortClick = (event) => {
-        const sortBtn = event.target.closest('.sorters button');
-        if (!sortBtn) return; // Exit if click wasn't on a sort button
+    const handleSortButtonClick = (event) => {
+        const sortButton = event.target.closest('.sorters button');
+        if (!sortButton) return;
         
-        const selectedSort = sortBtn.getAttribute('data-sort');
+        const selectedSort = sortButton.getAttribute('data-sort');
         // Toggle sort mode: if clicking the same button, turn off sorting
         currentSort = (currentSort === selectedSort) ? null : selectedSort;
         updateDisplay();
     };
 
-    // Attach event listeners using event delegation for better performance
-    // Single listener on recipeContainer handles all toggle button clicks
-    // This is called after rendering new recipes to maintain delegation
-    const attachToggleListeners = () => {
-        recipeContainer.removeEventListener('click', handleToggleClick);
-        recipeContainer.addEventListener('click', handleToggleClick);
+    // Attach event listeners to recipe container for dynamically rendered content
+    const attachRecipeContainerListeners = () => {
+        domElements.recipeContainer.removeEventListener('click', handleExpandableSectionToggle);
+        domElements.recipeContainer.removeEventListener('click', handleFavoriteButtonClick);
+        domElements.recipeContainer.addEventListener('click', handleExpandableSectionToggle);
+        domElements.recipeContainer.addEventListener('click', handleFavoriteButtonClick);
     };
 
-    // Attach event listeners using event delegation for filter and sort buttons
-    // Each section gets a single delegated listener for optimal performance
-    // These listeners are attached once during init and persist throughout app lifetime
-    const attachEventListeners = () => {
-        // Event delegation for filter buttons - attach to .filters section
-        // Handles all current and future filter buttons within this section
-        const filtersSection = document.querySelector('.filters');
-        if (filtersSection) {
-            filtersSection.addEventListener('click', handleFilterClick);
+    // Attach event listeners to static UI elements
+    const attachStaticElementListeners = () => {
+        // Filter buttons
+        if (domElements.filtersSection) {
+            domElements.filtersSection.addEventListener('click', handleFilterButtonClick);
         }
 
-        // Event delegation for sort buttons - attach to .sorters section
-        // Handles all current and future sort buttons within this section
-        const sortersSection = document.querySelector('.sorters');
-        if (sortersSection) {
-            sortersSection.addEventListener('click', handleSortClick);
+        // Sort buttons
+        if (domElements.sortersSection) {
+            domElements.sortersSection.addEventListener('click', handleSortButtonClick);
+        }
+
+        // Search input with debouncing
+        if (domElements.searchInput) {
+            domElements.searchInput.addEventListener('input', debouncedSearchInputHandler);
         }
     };
 
     // ========== PURE FUNCTIONS FOR BUSINESS LOGIC ==========
     // Pure predicates for filtering - Higher-order functions returning predicates
-    const createFilterPredicate = (filterMode) => {
-        const predicates = {
+    const createFilterModePredicate = (filterMode) => {
+        const filterPredicates = {
             all: () => () => true,
-            quick: () => (recipe) => recipe.time < 30,
+            favorites: () => (recipe) => favoritesSet.has(recipe.id),
+            quick: () => (recipe) => recipe.time < QUICK_RECIPE_TIME_LIMIT,
             easy: () => (recipe) => recipe.difficulty === 'easy',
             medium: () => (recipe) => recipe.difficulty === 'medium',
             hard: () => (recipe) => recipe.difficulty === 'hard'
         };
-        return (predicates[filterMode] || predicates.all)();
+        return (filterPredicates[filterMode] || filterPredicates.all)();
     };
 
     // Pure function: filter recipes based on mode using composed predicates
-    const applyFilter = (recipesList, filterMode) => {
-        const predicate = createFilterPredicate(filterMode);
+    const applyDifficultyFilter = (recipesList, filterMode) => {
+        const predicate = createFilterModePredicate(filterMode);
         return recipesList.filter(predicate);
     };
 
     // Pure comparators for sorting - Higher-order functions returning comparators
-    const comparators = {
-        name: (a, b) => a.title.localeCompare(b.title),
-        time: (a, b) => a.time - b.time
+    const sortComparators = {
+        name: (recipeA, recipeB) => recipeA.title.localeCompare(recipeB.title),
+        time: (recipeA, recipeB) => recipeA.time - recipeB.time
     };
 
     // Pure function: sort recipes based on mode without mutating original
-    const applySort = (recipesList, sortMode) => {
-        if (!sortMode || !comparators[sortMode]) return recipesList;
+    const applySortToRecipes = (recipesList, sortMode) => {
+        if (!sortMode || !sortComparators[sortMode]) return recipesList;
         
         // Create a shallow copy to avoid mutations
-        return [...recipesList].sort(comparators[sortMode]);
+        return [...recipesList].sort(sortComparators[sortMode]);
     };
 
     // Pure function: compose filter and sort operations
-    const processRecipes = (recipesList, filterMode, sortMode) => {
-        return applySort(
-            applyFilter(recipesList, filterMode),
+    const processRecipesWithoutSearch = (recipesList, filterMode, sortMode) => {
+        return applySortToRecipes(
+            applyDifficultyFilter(recipesList, filterMode),
             sortMode
         );
     };
 
-    // Pure function: get displayed recipes from current state
-    const getDisplayedRecipes = () => 
-        processRecipes(recipes, currentFilter, currentSort);
+    // Pure function: get displayed recipes from current state (without search)
+    const getBasicFilteredRecipesList = () => 
+        processRecipesWithoutSearch(recipes, currentFilter, currentSort);
+
+    // Update the recipe counter display
+    const updateRecipeCounterDisplay = () => {
+        if (!domElements.recipeCounter) return;
+        
+        const filteredRecipes = getFilteredRecipesList();
+        const totalRecipes = recipes.length;
+        const shownRecipes = filteredRecipes.length;
+        
+        domElements.recipeCounter.textContent = `Showing ${shownRecipes} of ${totalRecipes} recipe${totalRecipes !== 1 ? 's' : ''}`;
+    };
 
     // Central orchestrator: update state and re-render
     const updateDisplay = () => {
-        const recipesToDisplay = getDisplayedRecipes();
+        const recipesToDisplay = getFilteredRecipesList();
         renderRecipes(recipesToDisplay);
+        updateSearchResultsDisplay();
+        updateRecipeCounterDisplay();
     };
 
     // ========== PUBLIC API ==========
@@ -528,22 +695,23 @@ const RecipeApp = (() => {
     return {
         /**
          * Initialize the Recipe App
-         * Sets up event listeners and renders initial recipes
+         * - Loads saved favorites from localStorage
+         * - Attaches all event listeners
+         * - Renders initial recipe display
          * @public
          */
         init: () => {
-            attachEventListeners();
+            // Load favorites from localStorage on app initialization
+            favoritesSet = loadFavoritesFromStorage();
+            attachStaticElementListeners();
             updateDisplay();
         }
     };
     
 })();
 
-// Application Entry Point
+// ========== APPLICATION INITIALIZATION ==========
 // Initialize the app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     RecipeApp.init();
 });
-
-// Alternative: Call init immediately if script is loaded at end of body
-// RecipeApp.init();
