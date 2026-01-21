@@ -14,8 +14,19 @@
     
     <main>
         <section class="controls">
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    class="search-input" 
+                    placeholder="🔍 Search recipes by title or ingredients..."
+                    aria-label="Search recipes"
+                >
+                <div id="search-results-count" class="search-results-count"></div>
+            </div>
             <div class="filters">
                 <button data-filter="all">All Recipes</button>
+                <button data-filter="favorites">❤️ Favorites</button>
                 <button data-filter="easy">Easy Recipes</button>
                 <button data-filter="medium">Medium Recipes</button>
                 <button data-filter="hard">Hard Recipes</button>
@@ -26,6 +37,10 @@
                 <button data-sort="time">Sort: Time (Fastest First)</button>
             </div>
         </section>
+
+        <div class="recipe-stats">
+            <p id="recipe-counter" class="recipe-counter">Showing 0 of 0 recipes</p>
+        </div>
 
         <div id="recipe-container">
             <!-- Recipe cards will be rendered here by JavaScript -->

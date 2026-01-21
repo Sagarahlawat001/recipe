@@ -62,11 +62,60 @@ main {
     box-shadow: 0 8px 15px rgba(0,0,0,0.2);
 }
 
+/* Recipe Card Header - Title and Heart Button */
+.recipe-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.recipe-card-header h3 {
+    flex: 1;
+    margin: 0;
+}
+
+/* Heart Favorite Button */
+.heart-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.heart-btn:hover {
+    transform: scale(1.2);
+}
+
+.heart-btn:active {
+    transform: scale(0.95);
+}
+
+.heart-btn.active {
+    animation: heartBeat 0.3s ease-in-out;
+}
+
+@keyframes heartBeat {
+    0%, 100% {
+        transform: scale(1);
+    }
+    25% {
+        transform: scale(1.3);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
 /* Recipe Card Content */
 .recipe-card h3 {
     color: #667eea;
     font-size: 1.5rem;
-    margin-bottom: 0.5rem;
 }
 
 .recipe-meta {
@@ -305,6 +354,64 @@ main {
     border-radius: 12px;
     margin-bottom: 2rem;
     box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+/* Recipe Stats Section */
+.recipe-stats {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.recipe-counter {
+    font-size: 0.95rem;
+    color: #666;
+    font-weight: 500;
+    margin: 0;
+}
+
+/* Search Container */
+.search-container {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Search Input */
+.search-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-input::placeholder {
+    color: #999;
+}
+
+/* Search Results Count */
+.search-results-count {
+    font-size: 0.85rem;
+    color: #667eea;
+    font-weight: 500;
+    min-height: 1.2rem;
+    transition: color 0.2s ease;
+}
+
+.search-results-count.no-results {
+    color: #d32f2f;
 }
 
 .filters,
